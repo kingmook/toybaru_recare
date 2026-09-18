@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import logging
+import math
 from datetime import date, datetime, timezone
 from typing import Any
 from uuid import uuid4
@@ -420,8 +421,13 @@ class Api:
         remaining = charge_info.get(
             "remainingChargeTime", charge_info.get("remainingChargingTime")
         )
-        if plug == 4 or plug == 40:
+        # OneApp NA: 40 = AC charging, 56 = DC charging. Retain legacy
+        # code 4 for existing Toyota/Lexus NA consumers of this normalizer.
+        if plug in (4, 40, 56):
             charging_status = "charging"
+        elif plug in (36, 45, 60):
+            # Waiting for timer / AC complete / DC complete, not charging.
+            charging_status = "connected"
         elif plug == 12 or (plug is not None and connector in (None, 0)):
             charging_status = "not connected"
         elif connector and connector > 0:
@@ -446,8 +452,15 @@ class Api:
             "plugInHistory": charge_info.get("plugInHistory"),
         }
 
-        if remaining is not None and remaining != 65535:
-            result["remainingChargeTime"] = remaining
+        # Minutes; 65535 is the NA unavailable sentinel. Do not let malformed
+        # values (including JSON booleans) turn into a plausible-looking ETA.
+        if isinstance(remaining, (int, float, str)) and not isinstance(remaining, bool):
+            try:
+                minutes = float(remaining)
+            except (ValueError, OverflowError):
+                minutes = math.nan
+            if math.isfinite(minutes) and minutes.is_integer() and 0 <= minutes < 65535:
+                result["remainingChargeTime"] = int(minutes)
 
         # Providers have returned these fields both inside chargeInfo and at
         # the electric-status root. Keep the original JSON structures so a

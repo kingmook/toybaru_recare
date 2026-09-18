@@ -1520,12 +1520,10 @@ function renderVehicleHero(all) {
   }
 
   let chargeDetail = '';
-  if (cs === 'charging' && bat?.remainingChargeTime) {
-    const rt = bat.remainingChargeTime;
-    const kw = ((100 - (pctOk ? pct : 0)) / 100 * 71.4 / (rt / 60));
-    const fullAt = new Date(Date.now() + rt * 60000).toLocaleTimeString(LC, { hour: '2-digit', minute: '2-digit' });
+  const chargeEstimates = _chargeEstimateBoxes(bat);
+  if (chargeEstimates.length) {
     chargeDetail = `<div class="meta" style="margin-top:6px">
-      ${Math.floor(rt/60)}h ${rt%60}min · ${_escHtml(t('battery.full_at'))} ${fullAt} · ${kw.toFixed(1)} kW
+      ${chargeEstimates.map(([value,label]) => `${_escHtml(label)}: ${_escHtml(value)}`).join(' · ')}
     </div>`;
   }
 
@@ -2237,6 +2235,36 @@ async function loadCharging() {
   await _reloadChargeHistory();
 }
 
+// Pure estimate helpers shared by the vehicle and charge-management cards.
+function _chargeEstimate(battery, now = Date.now()) {
+  if (battery?.chargingStatus !== 'charging') return null;
+  const raw = battery.remainingChargeTime;
+  if (!['number','string'].includes(typeof raw) || String(raw).trim() === '') return null;
+  const minutes = Number(raw);
+  if (!Number.isInteger(minutes) || minutes < 0 || minutes >= 65535) return null;
+  const timestamp = battery.lastUpdateTimestamp;
+  // Require a timezone: an ambiguous local timestamp cannot anchor an ETA.
+  const parsed = typeof timestamp === 'string' && /(?:Z|[+-]\d{2}:\d{2})$/i.test(timestamp)
+    ? Date.parse(timestamp) : NaN;
+  const updatedAt = Number.isFinite(parsed) && parsed <= now ? parsed : null;
+  const finishAt = updatedAt === null ? null : updatedAt + minutes * 60000;
+  return {minutes, updatedAt, finishAt, stale: finishAt !== null && finishAt <= now};
+}
+
+function _chargeEstimateBoxes(battery, now = Date.now()) {
+  const estimate = _chargeEstimate(battery, now);
+  if (!estimate) return [];
+  const boxes = [];
+  if (estimate.stale) {
+    boxes.push([tf('battery.awaiting_estimate','Awaiting updated estimate'), tf('battery.estimated_finish','Estimated finish')]);
+  } else {
+    boxes.push([_fmtDur(estimate.minutes), tf('battery.reported_remaining','Reported remaining')]);
+    if (estimate.finishAt !== null) boxes.push([fmtDate(new Date(estimate.finishAt).toISOString()), tf('battery.estimated_finish','Estimated finish')]);
+  }
+  if (estimate.updatedAt !== null) boxes.push([fmtDate(new Date(estimate.updatedAt).toISOString()), tf('battery.last_update','Last update')]);
+  return boxes;
+}
+
 function _eventText(event) {
   if(event==null)return '';
   if(typeof event!=='object')return String(event);
@@ -2258,7 +2286,6 @@ function _eventText(event) {
 function renderChargeManagement(cm, battery) {
   const el=document.getElementById('chargeManagementCard');
   if(!cm){el.innerHTML='';return}
-  const remaining=cm.remaining_charge_time;
   const commandTag=cm.commands_enabled?tf('charging.experimental_controls','Experimental controls'):tf('charging.read_only','Read only');
   let h=`<div class="card"><div style="display:flex;justify-content:space-between;gap:12px;align-items:center">
     <div class="section-title">${_escHtml(tf('charging.management_title','Charge Management'))}</div>
@@ -2266,7 +2293,7 @@ function renderChargeManagement(cm, battery) {
   </div>`;
   const boxes=[];
   if(battery?.chargingStatus)boxes.push([battery.chargingStatus,tf('battery.status','Status')]);
-  if(remaining!=null)boxes.push([_fmtDur(_num(remaining)),tf('battery.full_in','Full in')]);
+  boxes.push(..._chargeEstimateBoxes(battery));
   if(cm.can_set_next_charging_event!=null)boxes.push([cm.can_set_next_charging_event?tf('charging.available','Available'):tf('charging.unavailable','Unavailable'),tf('charging.schedule_control','Schedule control')]);
   if(boxes.length){h+=`<div style="display:flex;gap:24px;flex-wrap:wrap;margin:10px 0">`;for(const [v,l] of boxes)h+=_sbox(v,l);h+='</div>';}
   if(!cm.enabled&&cm.experimental){

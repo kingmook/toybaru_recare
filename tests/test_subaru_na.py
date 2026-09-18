@@ -7,6 +7,8 @@ docs/api-inventory.md), and that the EU recipe is unchanged.
 
 from unittest.mock import AsyncMock
 
+import pytest
+
 from toybaru.api import Api
 from toybaru.const import REGIONS
 
@@ -136,6 +138,38 @@ def test_pp_na_electric_preserves_read_only_charge_management_fields():
 def test_pp_na_electric_ignores_remaining_time_sentinel():
     result = Api._pp_normalize_na_electric({"chargeInfo": {"remainingChargeTime": 65535}})
     assert "remainingChargeTime" not in result
+
+
+@pytest.mark.parametrize("plug,connector,status", [
+    (4, 5, "charging"), (40, 5, "charging"), (56, 5, "charging"),
+    (36, 5, "connected"), (45, 5, "connected"), (60, 5, "connected"),
+    (45, None, "connected"), (60, None, "connected"),
+    (12, 0, "not connected"), (99, 0, "not connected"),
+    (99, 5, "connected"), (None, None, "unknown"),
+])
+def test_pp_na_electric_charging_states(plug, connector, status):
+    result = Api._pp_normalize_na_electric({"vehicleInfo": {
+        "acquisitionDatetime": "2026-09-18T14:08:28Z",
+        "chargeInfo": {"plugStatus": plug, "connectorStatus": connector},
+    }})
+    assert result["chargingStatus"] == status
+    assert result["plugStatus"] == plug
+    assert result["lastUpdateTimestamp"] == "2026-09-18T14:08:28Z"
+
+
+@pytest.mark.parametrize("remaining", [
+    None, "", " ", "invalid", True, False, -1, "-1", 1.5,
+    65535, "65535", 65536, float("nan"), float("inf"), [], {},
+])
+def test_pp_na_electric_rejects_invalid_durations(remaining):
+    result = Api._pp_normalize_na_electric({"chargeInfo": {"remainingChargeTime": remaining}})
+    assert "remainingChargeTime" not in result
+
+
+@pytest.mark.parametrize("remaining,expected", [(0, 0), (95, 95), (95.0, 95), ("95", 95)])
+def test_pp_na_electric_accepts_minutes(remaining, expected):
+    result = Api._pp_normalize_na_electric({"chargeInfo": {"remainingChargeTime": remaining}})
+    assert result["remainingChargeTime"] == expected
 
 
 async def test_electric_command_transport_uses_profile_endpoint_and_envelope():

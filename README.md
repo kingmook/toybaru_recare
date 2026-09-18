@@ -320,6 +320,12 @@ pip install -e ".[test]"
 pytest tests/ -v
 ```
 
+The dashboard charging-estimate tests use Node.js (18+), with no npm dependencies:
+
+```bash
+node --test tests/dashboard_charge_estimate.test.cjs
+```
+
 ## Contributing
 
 This project is tested with one car in one country. If you have a Solterra or bZ4X in a different region and want to help, contributions are welcome:
