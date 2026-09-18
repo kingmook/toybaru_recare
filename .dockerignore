@@ -5,3 +5,16 @@ __pycache__
 *.db
 docs
 tests
+tools
+screenshots
+.env
+.env.*
+data
+captures
+.state
+tokens.json
+credentials.json
+session_meta.json
+regions.json
+*.db-wal
+*.db-shm

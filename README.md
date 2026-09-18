@@ -188,6 +188,32 @@ Open http://localhost:8099, sign in with your Subaru or Toyota account credentia
 
 Your data is stored in a Docker volume (`toybaru-data`). It persists across container restarts and rebuilds.
 
+#### Security updates
+
+Rebuild periodically to pick up Python base-image, Debian, and Python dependency
+updates. Both flags matter: `--pull` refreshes the base image and `--no-cache`
+reruns package installation ([Docker guidance](https://docs.docker.com/build/building/best-practices/#rebuild-your-images-often)).
+
+```bash
+docker compose build --pull --no-cache toybaru
+docker scout cves --only-fixed toybaru_recare-toybaru:latest
+# After reviewing the scan, replace the running container:
+docker compose up -d --no-deps toybaru
+```
+
+Use your actual Compose image name if the checkout directory is different.
+Rebuilding alone does not patch an already running container. Do not use
+`docker compose down -v`: it deletes the persistent data volume.
+
+The runtime uses Python 3.12 on Debian trixie with available OS updates applied.
+Only application sources and packaging files are copied in; capture tools and
+local credentials are excluded. The application runs as UID 1000 with
+root-owned application code and a writable data directory. `pip` is removed
+after installation, including its vendored build dependencies; install or update
+dependencies by rebuilding, not by running `pip` inside the live container.
+Some Debian findings may remain without a published fix; an empty fixable scan
+does not mean the image has no vulnerabilities.
+
 ### Local (Python)
 
 Requires Python 3.10+.

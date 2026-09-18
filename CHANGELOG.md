@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Security
+- Apply available Debian updates when building the Python 3.12/trixie Docker image.
+- Upgrade pip for installation, then remove it and its vendored dependencies from the runtime.
+- Restrict Docker build inputs to exclude capture tools and local credentials; keep application code root-owned while retaining writable persistent data for UID 1000.
+- Document fresh security rebuilds, scanning, and container replacement without deleting the data volume.
+
 ## [0.3.0] - 2026-08-22
 
 This release adds provider-aware support and diagnostics developed against a 2026 Subaru Trailseeker in North America. Experimental vehicle controls remain disabled by default.
